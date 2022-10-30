@@ -8,10 +8,10 @@ contract Shopes{
         address address_user;
         uint role; // 0 - покупатель, 1 - администратор, 2 - продавец
         uint ActiveRole; // текущая роль
-        bytes32 password;
     }
     
     struct reqestDown{
+        uint256 id;
         address user;
         address shope; // где работает
         bool status; // status - статус расмотрения админом. По умолчанию false.
@@ -19,6 +19,7 @@ contract Shopes{
     }
 
     struct reqestUp{ // заявка на повышение 
+        uint256 id;
         address user;
         address shope; // где хочет работать 
         bool status; // status - статус расмотрения админом. По умолчанию false.
@@ -57,9 +58,9 @@ contract Shopes{
     reqestDown[] ReqestDown;
 
     constructor(){
-        Users.push(users(0xDF80054F18b4535F2C56cd9BdED229f10d829E5a, 1, 1,keccak256(abi.encodePacked("1234")))); // admin
-        Users.push(users(0x6801f0240E1fe1A2831e464e39e82E89e2911E34, 0, 0,keccak256(abi.encodePacked("1111")))); // users
-        Users.push(users(0x4a89386fb7769c572b29Fb62818421c694bCb52F, 0, 0,keccak256(abi.encodePacked("1111"))));
+        Users.push(users(0x83A1C4FB921Eb488bd6cFf6008FbeE2c70d6451d, 1, 1)); // admin
+        Users.push(users(0xf66540d913619e93Af8985326BE718A10Be7A681, 0, 0)); // users
+        Users.push(users(0x4Ff3C34D2799722a1bf6eCC0082aC0b941c4cDB3, 0, 0));
     }
 
     // modifiers
@@ -137,44 +138,48 @@ contract Shopes{
     // admins functions
     function roleChange(address user, uint role) public isAdmin(msg.sender){
         for(uint id = 0; id < Users.length; id++){
-            require(Users[id].address_user == user, "301"); // error 301 - what the user?
-            require(Users[id].role != role, "201"); // error 201 - already has this role
-            Users[id].role = role;
-            Users[id].ActiveRole = role;
+            if(Users[id].address_user == user){
+                require(Users[id].role != role, "201"); // error 201 - already has this role
+                Users[id].role = role;
+                Users[id].ActiveRole = role;
+            }
         }
     }
 
     function addNewAdmin(address user) public isAdmin(msg.sender) isNotRegistered(user) isNotAdmin(user){
         for(uint id = 0; id < Users.length; id++){
-            require(Users[id].address_user == user, "302"); // error 302 - what the user?
-            Users[id].role = 1;
-            Users[id].ActiveRole = 1;
+            if(Users[id].address_user == user){
+                Users[id].role = 1;
+                Users[id].ActiveRole = 1;
+            }
         }
     }
 
-    function regNewShop(address newShop) public shopIsExists(newShop) isAdmin(msg.sender){
+    function regNewShop(address newShop, string memory nameShop) public isAdmin(msg.sender){
+        require(newShop != address(0), "213"); // error 213 - address new shop not null 
         shop storage new_shop = Shop.push();
-        new_shop.name_shop = "ddd";
+        new_shop.name_shop = nameShop;
         new_shop.address_shop = newShop;
     }
 
-    function deleteShop(address shope) public isAdmin(msg.sender) shopIsNotExists(shope){
+    function deleteShop(address shope) public isAdmin(msg.sender){
         for(uint id = 0; id < Shop.length; id++){
-            require(Shop[id].address_shop == shope, "303"); // error 303 - what the shop?
-            for(uint idW; idW < Shop[id].workers.length; idW++){
-                for(uint idU = 0; idU < Users.length; idU++){
-                    if(Users[idU].address_user == Shop[id].workers[idW]){
-                        Users[idU].role = 0;
-                        Users[idU].ActiveRole = 0;
+            if(Shop[id].address_shop == shope){
+                for(uint idW; idW < Shop[id].workers.length; idW++){
+                    for(uint idU = 0; idU < Users.length; idU++){
+                        if(Users[idU].address_user == Shop[id].workers[idW]){
+                            Users[idU].role = 0;
+                            Users[idU].ActiveRole = 0;
+                        }
                     }
                 }
+                delete Shop[id];
             }
-            delete Shop[id];
         }
     }
 
     function checkReqestInSeller(uint idReqest, uint adminAnswer) public isAdmin(msg.sender){
-        require(ReqestUp[idReqest].status != true, "208"); // error 208 - reqest has already been considered
+        // require(ReqestUp[idReqest].status != true, "208"); // error 208 - reqest has already been considered
         require(adminAnswer < 3, "209"); // error 209 - there is no such answer
         ReqestUp[idReqest].status = true;
         require(adminAnswer != 0, "210"); // error 210 - you need to reject or approve the application
@@ -185,13 +190,15 @@ contract Shopes{
         require(ReqestUp[idReqest].status != false, "211"); // error 211 - reqest has not been considered
         if(ReqestUp[idReqest].approval == 2){
             for(uint id = 0; id < Users.length; id++){
-                require(Users[id].address_user == ReqestUp[idReqest].user, "310"); // error 310 - what the user?
-                Users[id].role = 2;
-                Users[id].ActiveRole = 2;
-                for(uint idS = 0; idS < Shop.length; idS++){
-                    require(Shop[idS].address_shop == ReqestUp[idReqest].shope, "311"); // error 311 = what the shop?
-                    Shop[idS].workers.push(ReqestUp[idReqest].user);
-                }
+                if(Users[id].address_user == ReqestUp[idReqest].user){
+                    Users[id].role = 2;
+                    Users[id].ActiveRole = 2;
+                    for(uint idS = 0; idS < Shop.length; idS++){
+                        if(Shop[idS].address_shop == ReqestUp[idReqest].shope){
+                            Shop[idS].workers.push(ReqestUp[idReqest].user);
+                        }
+                    }
+                }    
             }
         }
     }
@@ -208,90 +215,107 @@ contract Shopes{
         require(ReqestDown[idReqest].status != false, "211"); // error 211 - reqest has not been considered
         if(ReqestDown[idReqest].approval == 2){
             for(uint id = 0; id < Users.length; id++){
-                require(Users[id].address_user == ReqestDown[idReqest].user, "310"); // error 310 - what the user?
-                Users[id].role = 0;
-                Users[id].ActiveRole = 0;
-                for(uint idS = 0; idS < Shop.length; idS++){
-                    require(Shop[idS].address_shop == ReqestDown[idReqest].shope, "311"); // error 311 = what the shop?
-                    for(uint idW = 0; idW < Shop[idS].workers.length; idW++){
-                        require(Shop[idS].workers[idW] == ReqestDown[idReqest].user, "312"); // error 312 - what the user?
-                        delete Shop[idS].workers[idW];
+                if(Users[id].address_user == ReqestDown[idReqest].user){
+                    Users[id].role = 0;
+                    Users[id].ActiveRole = 0;
+                    for(uint idS = 0; idS < Shop.length; idS++){
+                        if(Shop[idS].address_shop == ReqestDown[idReqest].shope){
+                            for(uint idW = 0; idW < Shop[idS].workers.length; idW++){
+                                if(Shop[idS].workers[idW] == Users[id].address_user){
+                                    delete Shop[idS].workers[idW];
+                                }
+                            }
+                        }
                     }
-                }
+                }     
             }
         }
     }
 
     // all functions
-    function regNewUser(address newUser, uint role) public isRegistered(newUser){
-        require(role < 3, "202"); // error 202 - incorrect role
-        Users.push(users(newUser, role, role, keccak256(abi.encodePacked("1111"))));
+    function regNewUser(address newUser) public isRegistered(newUser){
+        Users.push(users(newUser, 0, 0));
     }
 
     function roleSwitch(address user) public isNotRegistered(msg.sender){
         for(uint id = 0; id < Users.length; id++){
-            require(Users[id].address_user == user, "304"); // error 304 - what the user?
-            require(Users[id].role != 0, "206"); // error 206 - already have role = 0(buyer)
-            Users[id].ActiveRole = 0;
+            if(Users[id].address_user == user){
+                if(Users[id].ActiveRole == 0){
+                require(Users[id].role != 0, "206"); // error 206 - already have role = 0(buyer)
+                if(Users[id].role == 1){
+                    Users[id].ActiveRole = 1;
+                }
+                if(Users[id].role == 2){
+                    Users[id].ActiveRole = 2;
+                }
+                } else{
+                    Users[id].ActiveRole = 0;
+                }
+            }        
         }
     }
 
     function feedback(address shope, uint ocenka, string memory comm)public isBuyer(msg.sender) isNotRegistered(msg.sender){
         for(uint id = 0; id < Shop.length; id++){
-            require(Shop[id].address_shop == shope, "305"); // error 305 - what the shop?
-            for(uint idW = 0; idW < Shop[id].workers.length; idW++){
-                require(msg.sender != Shop[id].workers[idW], "203"); // error 203 - a store employee cannot leave a review on his store
-            }
-            otziv storage newOtziv = Shop[id].Otziv.push();
-            newOtziv.creator = msg.sender;
-            newOtziv.Ocenka = ocenka;
-            newOtziv.comment = comm;
-            
+            if(Shop[id].address_shop == shope){
+                for(uint idW = 0; idW < Shop[id].workers.length; idW++){
+                    require(msg.sender != Shop[id].workers[idW], "203"); // error 203 - a store employee cannot leave a review on his store
+                }
+                otziv storage newOtziv = Shop[id].Otziv.push();
+                newOtziv.creator = msg.sender;
+                newOtziv.Ocenka = ocenka;
+                newOtziv.comment = comm;
+            }  
         }
     }
 
     function addCommentForFeedback(address shope, uint idOtziv, string memory comm) public isNotRegistered(msg.sender){
         for(uint id = 0; id < Shop.length; id++){
-            require(Shop[id].address_shop == shope, "306"); // error 306 - what the shop?
-            answers storage newAnswer = Shop[id].Otziv[idOtziv].Answers.push();
-            newAnswer.creator = msg.sender;
-            newAnswer.comment = comm;
+            if(Shop[id].address_shop == shope){
+                answers storage newAnswer = Shop[id].Otziv[idOtziv].Answers.push();
+                newAnswer.creator = msg.sender;
+                newAnswer.comment = comm;
+            }  
         }
     }
 
     function addReactionForOtziv(address shope, uint idOtziv, uint reacti) public isNotRegistered(msg.sender){
         require(reacti < 2, "204"); // error 204 - there is no such reaction in reaction for Otziv
         for(uint id = 0; id < Shop.length; id++){
-            require(Shop[id].address_shop == shope, "307"); // error 307 - what the shop?
-            reactions storage newReaction = Shop[id].Otziv[idOtziv].React.push();
-            newReaction.user = msg.sender;
-            newReaction.reaction = reacti;
+            if(Shop[id].address_shop == shope){
+                reactions storage newReaction = Shop[id].Otziv[idOtziv].React.push();
+                newReaction.user = msg.sender;
+                newReaction.reaction = reacti;
+            }
         }
     }
 
     function addReactionForAnswer(address shope, uint idOtziv, uint idAnswer, uint reacti) public isNotRegistered(msg.sender){
         require(reacti < 2, "205"); // error 205 - there is no such reaction in reaction for Answer
         for(uint id = 0; id < Shop.length; id++){
-            require(Shop[id].address_shop == shope, "308"); // error 308 - what the shop?
-            reactions storage newReaction = Shop[id].Otziv[idOtziv].Answers[idAnswer].React.push();
-            newReaction.user = msg.sender;
-            newReaction.reaction = reacti;
+            if(Shop[id].address_shop == shope){
+                reactions storage newReaction = Shop[id].Otziv[idOtziv].Answers[idAnswer].React.push();
+                newReaction.user = msg.sender;
+                newReaction.reaction = reacti;
+            } 
         }
     }
 
-    function addReqestInSeller(address shope) public isNotRegistered(msg.sender) shopIsNotExists(shope){
-        for(uint id = 0; id < Users.length; id++){
-            require(Users[id].address_user == msg.sender, "309"); // error 309 - what the user?
-            require(Users[id].role != 2, "207"); // error 207 - you already have role seller
-            ReqestUp.push(reqestUp(msg.sender, shope, false, 0));
+    function addReqestInSeller(address shope) public isNotRegistered(msg.sender){
+        for(uint256 id = 0; id < Users.length; id++){
+            if(Users[id].address_user == msg.sender){
+                require(Users[id].role != 2, "207"); // error 207 - you already have role seller
+                ReqestUp.push(reqestUp(ReqestUp.length, msg.sender, shope, false, 0));
+            } 
         }
     }
 
-    function addReqestDownSeller(address shope) public isNotRegistered(msg.sender) shopIsNotExists(shope){
-        for(uint id = 0; id < Users.length; id++){
-            require(Users[id].address_user == msg.sender, "309"); // error 309 - what the user?
-            require(Users[id].role == 2, "212"); // error 212 - you dont already have role seller
-            ReqestDown.push(reqestDown(msg.sender, shope, false, 0));
+    function addReqestDownSeller(address shope) public isNotRegistered(msg.sender){
+        for(uint256 id = 0; id < Users.length; id++){
+            if(Users[id].address_user == msg.sender){
+                require(Users[id].role == 2, "212"); // error 212 - you dont already have role seller
+                ReqestDown.push(reqestDown(ReqestDown.length, msg.sender, shope, false, 0));
+            }
         }
     }
     
@@ -311,4 +335,5 @@ contract Shopes{
     function view_ReqestsDown() public view returns (reqestDown[] memory) {
         return (ReqestDown);
     }
+
 }
